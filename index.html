@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Premultiply</title>
+  <script src="https://cdn.jsdelivr.net/npm/jimp/browser/lib/jimp.js"></script>
+</head>
+<body>
+  <input type="file" id="file-selector">
+  <button id="download" disabled>Download premultipled image</button>
+
+  <script type="module">
+    import {fileSave} from 'https://cdn.jsdelivr.net/npm/browser-fs-access@^0.35/dist/index.modern.js';
+
+    const fileSelector = document.getElementById('file-selector');
+    const download = document.getElementById('download');
+    let newFileName = '';
+    let newBlob;
+    
+    fileSelector.addEventListener('change', async (event) => {
+      download.disabled = true;
+      const file = event.target.files[0];
+      const raw = await file.arrayBuffer();
+      const image = await Jimp.read(raw);
+      await new Promise((resolve) => {
+        image.scan(0, 0, image.bitmap.width, image.bitmap.height, function (x, y, idx) {
+          // this.bitmap.data[idx + 0] = Math.min(255, this.bitmap.data[idx + 0] + 100);
+          // this.bitmap.data[idx + 1] = Math.min(255, this.bitmap.data[idx + 1] + 100);
+          // this.bitmap.data[idx + 2] = Math.min(255, this.bitmap.data[idx + 2] + 100);
+          const alphaFloat = this.bitmap.data[idx + 3] / 255;
+          this.bitmap.data[idx + 0] *= alphaFloat;
+          this.bitmap.data[idx + 1] *= alphaFloat;
+          this.bitmap.data[idx + 2] *= alphaFloat;
+          
+          if (x == this.bitmap.width - 1 && y == this.bitmap.height - 1) {
+            resolve();
+          }
+        });
+      });
+
+      newBlob = new Blob([await image.getBufferAsync('image/png')], {
+        type: 'image/png',
+      });
+      newFileName = `${file.name.substring(0, file.name.lastIndexOf('.')) || file.name}-premultiplied.png`;
+      download.disabled = false;
+    });
+    
+    download.addEventListener('click', async () => {
+      await saveFile(newBlob, newFileName);
+    });
+    
+    async function saveFile(blob, fileName) {
+      await new Promise((resolve) => {
+        const a = document.createElement('a');
+        a.download = fileName;
+        a.href = URL.createObjectURL(blob);
+        a.addEventListener('click', (e) => {
+          const url = a.href;
+          setTimeout(() => URL.revokeObjectURL(url), 30 * 1000);
+          resolve();
+        });
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+    }
+  </script>
+</body>
+</html>
